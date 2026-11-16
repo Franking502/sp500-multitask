@@ -1,0 +1,349 @@
+FeatureEngineer 使用说明
+================================================================================
+模块 0 · 数据预处理与特征工程
+定义文件：src/0_DataPreprocessing/DataDescription.py
+输出文件：src/FeatureEngineerUsage.txt
+
+说明：仓库中该类当前位于 src/0_DataPreprocessing/ 目录下（该目录名以数字开头，
+不能直接 import），因此下面的示例统一先执行
+
+    import sys
+    sys.path.insert(0, "src/0_DataPreprocessing")
+
+若你把 DataDescription.py 复制/移动到了 src/ 下，把上面这行改成
+sys.path.insert(0, "src") 即可，类名与用法完全不变。
+
+
+1. 它能做什么
+--------------------------------------------------------------------------------
+把 OHLCV 行情表变成模型可用的特征矩阵，全部方法都遵循同一套约定：
+
+  * 一个类：FeatureEngineer(df)，方法调用即返回指标，不需要记忆函数名；
+  * 数据来源：DataFrame、from_csv(路径)，或把任意 Series 直接传给方法；
+  * 返回值是 pd.Series / pd.DataFrame，索引与输入对齐，预热期为 NaN；
+  * 只用当日及之前的数据（滞后收益率显式 shift），不会偷看未来；
+  * 列名固定（ma_20、rsi_14、macd_hist ……），下游可以直接按名取用。
+
+
+2. 快速开始（3 行）
+--------------------------------------------------------------------------------
+    import sys; sys.path.insert(0, "src/0_DataPreprocessing")
+    from DataDescription import FeatureEngineer
+
+    fe = FeatureEngineer.from_csv("data/processed/sp500_clean.csv")
+    fe.ma(20).tail(3)          # 20 日均线
+    fe.build()                 # 29 个特征 + 原始行情的一体化宽表
+
+
+3. 导入方式
+--------------------------------------------------------------------------------
+函数式入口（对应 README 里约定的 build_features）
+
+    from DataDescription import build_features
+    features = build_features(clean_df)
+
+
+4. 构造对象
+--------------------------------------------------------------------------------
+4.1 直接传入 DataFrame
+
+    fe = FeatureEngineer(df)            # df 需含 Close（大小写不敏感），索引为日期
+
+    * 列名会自动匹配大小写：Close / close / CLOSE 都能识别；
+    * Open/High/Low/Volume 可选，只有 atr() 需要 High、Low；
+    * 索引不是 DatetimeIndex 时会尝试 pd.to_datetime 转换；
+    * 内部会复制数据、按日期排序、去重（保留最后一条），不会修改你的 df。
+
+4.2 从 CSV 读取（默认读清洗后的文件）
+
+    fe = FeatureEngineer.from_csv("data/processed/sp500_clean.csv")
+    fe = FeatureEngineer.from_csv("data/SP500_daily.csv")        # 原始文件也行
+
+    签名：from_csv(path="data/processed/sp500_clean.csv", *, date_col="Date", **kwargs)
+    * date_col 指定日期列（为 "Date" 时自动设为索引）；
+    * 其余 kwargs 透传给构造函数，例如 from_csv(path, verbose=True)。
+
+4.3 不绑定数据，每次调用自己传序列
+
+    fe = FeatureEngineer()
+    fe.rsi(14, close_series)            # 第二个位置参数就是 series
+    fe.macd(12, 26, 9, other_close)
+
+4.4 换数据
+
+    fe.set_data(new_df)                 # 返回 self，可链式调用
+
+4.5 常用属性
+
+    fe.data      # 内部持有的 DataFrame（副本）
+    fe.close     # 收盘价 Series，float
+
+    构造函数参数：
+      FeatureEngineer(data=None, *, price_col="Close", volume_col="Volume",
+                      annualize=252, verbose=False)
+      annualize 只影响 rolling_volatility 的年化系数（默认 252）。
+
+
+5. 单个指标方法
+--------------------------------------------------------------------------------
+所有方法都返回与输入等长的结果，前若干行为 NaN（预热期）。
+除 atr() 外，各方法都有 series 参数；省略时用 self.data 的收盘价。
+其中 ma / ma_ratio / ema / rsi / macd 的 series 可作位置参数，
+bollinger / rolling_volatility / lagged_returns 的 series 是关键字参数（series=...）。
+
+5.1 简单移动平均 ma / 均线偏离度 ma_ratio
+
+    fe.ma(window=20, series=None) -> Series        列名 ma_20
+    fe.ma_ratio(window=20, series=None) -> Series  列名 ma_ratio_20
+
+    即 mean(Close, 20) 与 Close / ma_20 - 1。
+
+    >>> fe.ma(20).tail(2)
+    Date
+    2026-11-12    7618.150488
+    2026-11-13    7613.261987
+    Name: ma_20, dtype: float64
+
+5.2 指数移动平均 ema
+
+    fe.ema(span=20, series=None) -> Series         列名 ema_20
+
+    alpha = 2 / (span + 1)，adjust=False，min_periods = span（与 TA-Lib 口径一致）。
+
+5.3 相对强弱指标 rsi
+
+    fe.rsi(window=14, series=None) -> Series       列名 rsi_14
+
+    Wilder RSI：涨幅、跌幅分别做 alpha = 1/window 的指数平滑，
+    RSI = 100 - 100 / (1 + 平均涨幅/平均跌幅)，取值 0~100。
+    全程上涨返回 100，完全无波动返回 50。
+
+    >>> fe.rsi(14).tail(2)
+    Date
+    2026-11-12    48.379564
+    2026-11-13    46.810320
+
+5.4 MACD
+
+    fe.macd(fast=12, slow=26, signal=9, series=None) -> DataFrame
+    列：macd（DIF）、macd_signal（DEA）、macd_hist（柱 = DIF - DEA）
+
+    fast 必须小于 slow，否则抛 ValueError。
+
+    >>> fe.macd().tail(2)
+                    macd  macd_signal  macd_hist
+    Date
+    2026-11-12   -44.390      -41.190     -3.200
+    2026-11-13   -42.222      -41.396     -0.826
+
+5.5 布林带
+
+    fe.bollinger(window=20, num_std=2.0, *, ddof=0, series=None) -> DataFrame
+    列：bb_mid_20、bb_upper_20、bb_lower_20、bb_pctb_20、bb_width_20
+
+    中轨 = SMA20；上下轨 = 中轨 ± num_std × 20 日标准差（默认总体标准差 ddof=0）；
+    %B = (Close - 下轨) / (上轨 - 下轨)，0 为下轨、1 为上轨，突破时可越界；
+    带宽 = (上轨 - 下轨) / 中轨。
+
+    >>> fe.bollinger(20, 2.0).tail(1)
+                 bb_mid_20  bb_upper_20  bb_lower_20  bb_pctb_20  bb_width_20
+    Date
+    2026-11-13   7613.262     7830.781     7395.743       0.381        0.057
+
+5.6 滚动波动率
+
+    fe.rolling_volatility(window=21, *, annualize=True, series=None) -> Series
+
+    列名 vol_21_ann（annualize=False 时为 vol_21）。
+    输入是价格序列时内部先取对数差分；std 用样本标准差（ddof=1），
+    年化系数为 sqrt(annualize)，默认 sqrt(252)。
+
+    >>> fe.rolling_volatility(21).tail(2)
+    Date
+    2026-11-12    0.2188          # 21.88%（年化）
+    2026-11-13    0.2186
+
+5.7 滞后收益率
+
+    fe.lagged_returns(lags=(1, 2, 3, 4, 5), *, log=True, series=None) -> DataFrame
+    列：log_ret_lag_1 … log_ret_lag_k（log=False 时为 ret_lag_k）
+
+    第 t 行存的是 r_{t-k}，即 log_ret.shift(k)，专门用来避免「用当天收益预测当天」。
+
+    >>> fe.lagged_returns((1, 2, 5)).tail(2)
+                log_ret_lag_1  log_ret_lag_2  log_ret_lag_5
+    Date
+    2026-11-12         0.0130        -0.0038        -0.0445
+    2026-11-13        -0.0035         0.0130         0.0031
+
+5.8 平均真实波幅 atr（附加）
+
+    fe.atr(window=14, *, normalized=False) -> Series
+    列名 atr_14；normalized=True 时返回 atr_14 / Close，列名 atr_pct_14。
+
+    TR = max(High - Low, abs(High - 前收), abs(Low - 前收))，
+    再做 alpha = 1/14 的 Wilder 平滑；需要 High、Low 两列，否则抛 ValueError。
+
+    >>> fe.atr(14).tail(1)
+    Date
+    2026-11-13    108.086        # 单位是指数点位
+
+
+6. 批量构建 build()
+--------------------------------------------------------------------------------
+    fe.build(*, dropna=True, config=None) -> DataFrame
+
+    返回「原始行情 + 收益率 + 全部指标」的宽表，索引为交易日。
+    在 SP500 全样本上：build() 形状为 (7347, 44)，
+    即 15 个基础列（Date 已作为索引）+ 29 个特征列 = 44 列。
+
+    默认配置（DEFAULT_CONFIG）：
+
+      ma_windows   (5, 10, 20, 50, 200)      → ma_* 与 ma_ratio_* 各 5 个
+      ema_spans    (12, 26)                  → ema_12、ema_26
+      rsi_window   14                        → rsi_14
+      macd         {fast:12, slow:26, signal:9} → macd、macd_signal、macd_hist
+      bollinger    {window:20, num_std:2.0}  → bb_* 共 5 个
+      vol_windows  (21, 63)                  → vol_21_ann、vol_63_ann
+      lags         (1, 2, 3, 4, 5)           → log_ret_lag_1 … 5
+      atr_window   14                        → atr_14
+
+    共 5×2 + 2 + 1 + 3 + 5 + 2 + 5 + 1 = 29 个特征。
+
+6.1 dropna
+
+    build(dropna=True)   默认。删除特征预热期所在行（S&P 数据丢 199 行，
+                         起点 1996-11 → 1997-08-29），可直接训练；
+    build(dropna=False)  保留完整时间轴，方便画指标曲线或检查前 200 行。
+
+6.2 config 覆盖
+
+    fe.build(config={"ma_windows": (10, 20), "lags": (1, 2, 3)})
+    # 特征数变为 21：4(ma+ratio) + 2(ema) + 1(rsi) + 3(macd) + 5(bb)
+    #              + 2(vol) + 3(lag) + 1(atr)
+
+    只覆盖你写的键，其余仍用 DEFAULT_CONFIG，不需要重复全部参数。
+
+
+7. 辅助方法
+--------------------------------------------------------------------------------
+7.1 feature_columns() -> list[str]
+
+    返回全部特征列名（默认配置 29 个），自动排除所有基础列：
+      OHLCV、is_filled、segment、ret、log_ret、cum_log_ret、
+      dollar_volume、range_pct、gap_pct、running_max、drawdown。
+    用法：X = feats[fe.feature_columns()]；Y = feats["log_ret"].shift(-1)
+
+7.2 describe() -> DataFrame
+
+    特征覆盖率清单，列：feature、group、n_valid、coverage、first_valid。
+    coverage 是有效值占全样本的比例（ma_200 约 0.9736，因为前 199 行是预热期）。
+
+    >>> fe.describe().head(3)
+          feature group  n_valid  coverage first_valid
+    0        ma_5    ma     7542    0.9995  1996-11-20
+    1  ma_ratio_5    ma     7542    0.9995  1996-11-20
+    2       ma_10    ma     7537    0.9988  1996-11-27
+
+7.3 save_features(path=...) -> Path
+
+    fe.save_features("data/processed/sp500_features.csv")
+    把 build() 结果落盘，索引列名为 Date。目录不存在会自动创建。
+
+
+8. 模块级函数 build_features()
+--------------------------------------------------------------------------------
+    build_features(data, *, dropna=True, config=None, **kwargs) -> DataFrame
+
+    等价于 FeatureEngineer(data, **kwargs).build(dropna=dropna, config=config)，
+    保留给「只想要一个函数」的调用方：
+
+    from DataDescription import build_features
+    feats = build_features(clean_df, config={"ma_windows": (10, 20)})
+
+
+9. 典型工作流
+--------------------------------------------------------------------------------
+    import sys
+    sys.path.insert(0, "src/0_DataPreprocessing")
+
+    from DataPreprocessing import DataPreprocessor
+    from DataDescription import FeatureEngineer
+
+    # 1) 清洗 + 时间序划分（严禁随机打乱）
+    prep = DataPreprocessor()
+    prep.prepare()
+    splits = prep.split()                      # {"train","val","test"}
+    prep.export_processed()                    # 导出带 segment 列的 sp500_clean.csv
+
+    # 2) 在全样本上算特征：验证/测试集开头也能带上之前的历史，
+    #    指标本身只依赖当日及以前，所以不会泄漏未来。
+    fe = FeatureEngineer.from_csv("data/processed/sp500_clean.csv")
+    feats = fe.build()
+    feat_cols = fe.feature_columns()
+
+    # 3) 按 segment 切回三段
+    X_train = feats.loc[feats["segment"] == "train", feat_cols]
+    X_val   = feats.loc[feats["segment"] == "val",   feat_cols]
+    X_test  = feats.loc[feats["segment"] == "test",  feat_cols]
+
+    # 4) 标签示例：次日涨跌（最后一行没有次日数据，需要丢掉）
+    label = feats["log_ret"].shift(-1)          # 次日对数收益
+    y = (label > 0).astype(int)                 # 涨=1、跌=0
+    y = y[label.notna()]
+
+    注意：
+      * 若不想依赖导出的 CSV，也可以给 feats 手动补一列 segment
+        （用 splits 里各段的 index 赋值），效果相同；
+      * 后续做标准化/归一化时，请只用训练集的均值方差 fit，
+        再 transform 验证集与测试集，避免信息泄漏。
+
+
+10. 常见坑
+--------------------------------------------------------------------------------
+  * 数据太短：窗口大于样本量时抛 ValueError（例如 100 行数据调 ma(200)，
+    实测报「数据长度 100 不足，MA 至少需要 200」）；
+  * build() 报「去除预热期后没有剩余样本」：说明最长窗口（默认 200）把样本清空了，
+    调小窗口或换更长的数据；
+  * 首行 NaN：ret / log_ret / gap_pct 需要前一日收盘价，属正常；
+  * 价格类特征量纲约 700~7800，比例类特征在 ±1 附近，
+    线性模型/神经网络务必标准化，树模型可以不管；
+  * %B 会越界（<0 或 >1），RSI 不会越界，不要对 %B 做截断；
+  * segment、is_filled 不是特征，别喂给模型；
+  * 报错「尚未绑定数据」：用 FeatureEngineer() 构造后既没 set_data，
+    调用时也没传 series。
+
+
+11. 命令行用法
+--------------------------------------------------------------------------------
+    python src/0_DataPreprocessing/DataDescription.py
+
+    可选参数：
+      --csv PATH   输入文件（默认 data/processed/sp500_clean.csv；
+                   不存在时回退 data/SP500_daily.csv）
+      --out PATH   特征输出（默认 data/processed/sp500_features.csv）
+      --no-save    只打印特征覆盖率与前几行，不写文件
+
+    输出：控制台打印覆盖率表与矩阵形状，并写出特征 CSV。
+
+
+12. 方法速查表
+--------------------------------------------------------------------------------
+    方法                              返回        关键列名
+    --------------------------------  ----------  --------------------------------
+    ma(window=20)                     Series      ma_20
+    ma_ratio(window=20)               Series      ma_ratio_20
+    ema(span=20)                      Series      ema_20
+    rsi(window=14)                    Series      rsi_14
+    macd(fast=12, slow=26, signal=9)  DataFrame   macd / macd_signal / macd_hist
+    bollinger(window=20, num_std=2.0) DataFrame   bb_mid/upper/lower/pctb/width_20
+    rolling_volatility(window=21)     Series      vol_21_ann
+    lagged_returns(lags=(1,2,3,4,5))  DataFrame   log_ret_lag_1 … 5
+    atr(window=14)                    Series      atr_14（normalized 时为 atr_pct_14）
+    build(dropna=True, config=None)   DataFrame   44 列 = 15 基础 + 29 特征
+    feature_columns()                 list[str]   29 个特征名
+    describe()                        DataFrame   feature/group/n_valid/coverage
+    save_features(path)               Path        写出 CSV
+--------------------------------------------------------------------------------
+（本说明依据 src/0_DataPreprocessing/DataDescription.py 的实际代码与
+  SP500 数据截至 2026-11-13 的真实运行结果整理。）
