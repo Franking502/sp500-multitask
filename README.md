@@ -137,3 +137,46 @@ sp500-multitask/
 - **RL 不收敛**：降级为 Q-table 或直接以“策略模块”的监督学习回测作为长期收益分析，RL 作为扩展尝试报告。
 - **GitHub 协作冲突**：每人只在个人分支修改自己负责的 notebook 和 `src/` 中自己的文件；共享文件（如 `features.py`）由成员 1 统一维护，其他人通过 PR 提修改。
 
+---
+
+## 六、模块 A 接口说明（`src/0_DataPreprocessing/`）
+
+### 1. 数据预处理 `DataPreprocessing.py`
+
+```python
+from DataPreprocessing import DataPreprocessor
+
+prep = DataPreprocessor()        # 默认读取 data/SP500_daily.csv
+prep.prepare()                   # 去重、缺失值、异常 OHLC、零成交量、交易日对齐
+df = prep.data                   # Date 索引 + OHLCV + ret / log_ret / cum_log_ret / drawdown ...
+splits = prep.split()            # {"train": …, "val": …, "test": …}，按时间顺序切分，不打乱
+prep.split_table()               # 各集合起止日期、样本量与占比
+prep.export_processed()          # 导出 data/processed/sp500_clean.csv（附 segment 列）
+```
+
+- 交易日对齐：以工作日日历为基准，≤4 个工作日的缺口视为节假日休市（不填充），
+  更长的缺口视为数据断档，前向填充并打 `is_filled` 标记。
+- 生成 5 张英文标注的 EDA 图到 `src/0_DataPreprocessing/Outcome/`：
+  价量时序、收益率分布、滚动波动率、年月收益热力图、最大回撤。
+- 命令行：`python src/0_DataPreprocessing/DataPreprocessing.py`。
+
+### 2. 特征工程 `DataDescription.py`
+
+```python
+from DataDescription import FeatureEngineer
+
+fe = FeatureEngineer.from_csv("data/processed/sp500_clean.csv")
+fe.ma(20)                   # ma_20 / ma_ratio_20
+fe.ema(12)                  # ema_12
+fe.rsi(14)                  # rsi_14
+fe.macd()                   # macd / macd_signal / macd_hist
+fe.bollinger(20, 2.0)       # bb_mid_20 / bb_upper_20 / bb_lower_20 / bb_pctb_20 / bb_width_20
+fe.rolling_volatility(21)   # vol_21_ann
+fe.lagged_returns((1, 2, 3))  # log_ret_lag_1 … log_ret_lag_3
+features = fe.build()       # 一体化特征矩阵（默认 29 个特征，已剔除预热期）
+```
+
+- 也兼容函数式调用：`build_features(df)`（即 README 中约定的入口）。
+- 命令行：`python src/0_DataPreprocessing/DataDescription.py`，输出 `data/processed/sp500_features.csv`。
+- 每个方法都接受 `series` 参数，可脱离 `self.data` 单独计算，例如 `fe.rsi(14, other_close)`。
+
