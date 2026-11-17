@@ -1,0 +1,17 @@
+# 5_VolatilityModelingAndForecasting 依赖清单
+# 安装：pip install -r src/5_VolatilityModelingAndForecasting/requirement.txt
+# 环境：Python >= 3.10（本项目在 Python 3.13 上验证）
+
+# GARCH 族模型（拟合、滚动预测、多步模拟）
+arch==9.0.0
+
+# 数值计算与数据表
+numpy>=2.0
+pandas>=2.2
+
+# arch 的底层依赖，同时用于分布函数与统计检验
+scipy>=1.10
+statsmodels>=0.14
+
+# 绘图（5 张英文标注图）
+matplotlib>=3.8
