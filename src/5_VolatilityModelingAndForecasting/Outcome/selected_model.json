@@ -1,0 +1,11 @@
+{
+  "best_model": "egarch",
+  "label": "EGARCH(1,1)",
+  "val_rmse_h1": 13.994370400587357,
+  "target_vol": 0.15,
+  "w_max": 1.0,
+  "cost": 0.001,
+  "refit_every": 20,
+  "train_end": "2018-12-31",
+  "val_end": "2021-12-31"
+}
