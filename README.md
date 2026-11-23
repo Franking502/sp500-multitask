@@ -5,6 +5,7 @@
 - 2_RiseFallForecast 涨跌预测
 - 3_TradingStrategy_Backtesting 交易策略与回测
 - 4_Long-termBenefits 长期收益
+- 5_VolatilityModelingAndForecasting 波动率建模与预测
 
 
 ## 一、仓库与环境搭建
@@ -19,13 +20,15 @@ sp500-multitask/
 │  ├─1_TimeSerialAnalyze
 │  ├─2_RiseFallForecast
 │  ├─3_TradingStrategy_Backtesting
-│  └─4_Long-termBenefits
+|  ├─4_Long-termBenefits
+│  └─5_VolatilityModelingAndForecasting
 └─src
     ├─0_DataPreprocessing
     ├─1_TimeSerialAnalyze
     ├─2_RiseFallForecast
     ├─3_TradingStrategy_Backtesting
-    └─4_Long-termBenefits
+    ├─4_Long-termBenefits
+    └─5_VolatilityModelingAndForecasting
 ```
 
 ---
@@ -103,6 +106,17 @@ sp500-multitask/
 - 诚实报告：RL 在单一股票指数上的训练容易过拟合，需在验证集上早停，并报告测试集结果而非训练集结果。
 
 **简化建议**：若 RL 实现困难，可降级为“基于 Q-learning 的离散状态-动作表格方法”，状态离散化为（趋势 up/down × 波动率 high/low），动作 {持有/空仓}，保证可运行、可解释。
+
+### 模块 F：波动率建模与预测
+
+**产出**：波动率预测模型
+
+**具体内容**：
+- 三个模型（GARCH / EGARCH / GJR-GARCH）的参数表与残差诊断；
+- 验证集、测试集上逐日的 1/5/10 步波动率预测序列；
+- RMSE / MAE / QLIKE 对比表（模型 × 步长 × 数据集，含 RV20 naive 基准）；
+- 波动率目标仓位回测：满仓、模型预测调仓、历史 RV20 调仓三条净值曲线；
+- `Outcome/summary.md`：哪个模型误差最小、调仓是否改善风险指标、诚实结论。
 
 ---
 
