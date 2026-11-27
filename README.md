@@ -53,6 +53,8 @@ sp500-multitask/
 
 ### 模块 B：时间序列预测
 
+模块代码、运行方法与当前实验结果见 [时间序列模块 README](src/1_TimeSerialAnalyze/README.md)。
+
 **产出**：预测 notebook + 最佳模型保存 + 指定窗口预测结果。
 
 **具体内容**：
@@ -60,7 +62,7 @@ sp500-multitask/
 - 机器学习模型：LightGBM 或 XGBoost（用滞后特征）。
 - 深度学习模型（可选）：LSTM 或 Transformer 简化版。
 - 评价指标：**RMSE、MAE、R²**。股票预测中 R² 往往偏低，需如实报告并讨论滞后性问题。
-- **最终交付**：对助教/课程指定的时间窗口（例如最后 20 个交易日）输出价格预测值，保存为 `reports/forecast_window.csv`。
+- **最终交付**：对助教/课程指定的时间窗口（例如最后 20 个交易日）输出价格预测值，保存为 `reports/1_TimeSerialAnalyze/forecast_window.csv`。
 
 **注意**：预测目标用“收益率”还是“价格”需统一。建议同时输出两者，但以价格预测作为最终交付格式。
 
