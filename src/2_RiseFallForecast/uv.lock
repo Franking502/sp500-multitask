@@ -1364,6 +1364,7 @@ name = "sp500-rise-fall"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "joblib" },
     { name = "jupyterlab" },
     { name = "matplotlib" },
     { name = "pandas" },
@@ -1373,6 +1374,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "joblib" },
     { name = "jupyterlab" },
     { name = "matplotlib" },
     { name = "pandas" },
