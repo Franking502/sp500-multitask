@@ -1,0 +1,4 @@
+Strategy,Cumulative Return,Sharpe,Max Drawdown
+PPO,3.29%,0.121,-18.78%
+Q-Learning,425.44%,3.775,-3.72%
+Buy & Hold,92.44%,0.979,-18.90%
