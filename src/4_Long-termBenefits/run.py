@@ -9,7 +9,7 @@ from LTB_train_PPO import train_ppo, rollout, sharpe
 from LTB_q_learning import run_tabular_q
 from LTB_plots import plot_curves
 
-OUT_DIR = "outcome"
+OUT_DIR = "report"
 COLS = ["log_ret", "ma_ratio_20", "rsi_14", "macd_hist", "vol_21_ann"]
 
 

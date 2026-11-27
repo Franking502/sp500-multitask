@@ -13,7 +13,7 @@ def plot_curves(steps, val_curve, dates, strategies_nw, out_dir):
     plt.ylabel("Sharpe")
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "train_curve1.png"), dpi=200)
+    plt.savefig(os.path.join(out_dir, "train_curve.png"), dpi=200)
     plt.close()
 
     # 2. 收益对比
@@ -22,7 +22,7 @@ def plot_curves(steps, val_curve, dates, strategies_nw, out_dir):
     ax.grid(alpha=0.3)
     fig = ax.get_figure()
     fig.tight_layout()
-    fig.savefig(f"{out_dir}/long_term_comparison1.png", dpi=200)
+    fig.savefig(f"{out_dir}/long_term_comparison.png", dpi=200)
     plt.close(fig)
 
 
