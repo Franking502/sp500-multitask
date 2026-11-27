@@ -1,0 +1,12 @@
+[project]
+name = "sp500-rise-fall"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pandas",
+    "joblib",
+    "scikit-learn",
+    "xgboost",
+    "matplotlib",
+    "jupyterlab",
+]
