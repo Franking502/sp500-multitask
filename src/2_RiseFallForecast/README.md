@@ -1,6 +1,32 @@
 # Next-day S&P 500 direction
 
-The notebook predicts whether the index will close higher on the next trading day, using three features available after the current close: the lagged daily log return, the deviation from the 20-day moving average, and 21-day annualized volatility.
+This module predicts whether the index will close higher on the next trading day using three features available after the current close: the lagged daily log return, the deviation from the 20-day moving average, and 21-day annualized volatility. Run the Python script for the group project or open the notebook to follow each step.
+
+## Run the full workflow
+
+From the repository root, run:
+
+```sh
+uv run --locked --project src/2_RiseFallForecast python src/2_RiseFallForecast/RiseFallForecast.py
+```
+
+The script finds `data/processed/sp500_features.csv` relative to its own location. It writes the metrics, figures, selected model and signals under `reports/2_RiseFallForecast/`. The final handoff file is `reports/2_RiseFallForecast/signals/test_signals.csv`. To supply another feature CSV or results directory, pass `--input` or `--output-dir` after the script name.
+
+For a group runner stored at the repository root, call the same command from Python. `check=True` stops the runner if this module fails, before the backtest reads the signals.
+
+```python
+from pathlib import Path
+import subprocess
+
+repo_root = Path(__file__).resolve().parent
+module = "src/2_RiseFallForecast"
+subprocess.run(
+    ["uv", "run", "--locked", "--project", module, "python", f"{module}/RiseFallForecast.py"],
+    cwd=repo_root,
+    check=True,
+)
+signals_file = repo_root / "reports/2_RiseFallForecast/signals/test_signals.csv"
+```
 
 ## Run the notebook
 
